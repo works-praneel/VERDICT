@@ -1,0 +1,38 @@
+[
+  {
+    "branch": "feature/hardcoded-secret",
+    "expected": "request_changes",
+    "actual": "request_changes",
+    "match": true,
+    "scanner_source": "llm",
+    "reviewer_source": "llm",
+    "judge_source": "llm"
+  },
+  {
+    "branch": "feature/style-issue",
+    "expected": "comment",
+    "actual": "request_changes",
+    "match": false,
+    "scanner_source": "llm",
+    "reviewer_source": "llm",
+    "judge_source": "llm"
+  },
+  {
+    "branch": "feature/missing-test",
+    "expected": "comment",
+    "actual": "approve",
+    "match": false,
+    "scanner_source": "llm",
+    "reviewer_source": "llm",
+    "judge_source": "rule"
+  },
+  {
+    "branch": "feature/clean-pr",
+    "expected": "approve",
+    "actual": "approve",
+    "match": true,
+    "scanner_source": "llm",
+    "reviewer_source": "llm",
+    "judge_source": "rule"
+  }
+]
