@@ -3,6 +3,7 @@ import pytest
 
 from verdict.agents import planner
 from verdict.context import ReviewContext
+from verdict.evidence import ruff_findings_to_evidence
 from verdict import tools
 from verdict.tool_registry import ToolRegistration, ToolRegistry, ToolResolution
 
@@ -82,13 +83,13 @@ def test_unsupported_capability_does_not_discard_supported_capability():
     registry = ToolRegistry()
     calls = []
     registry._registrations["lint_python"] = ToolRegistration(
-        "lint_python", "ruff", lambda repo_path, changed_files: calls.append((repo_path, changed_files)) or ["ran"], "repo_files"
+        "lint_python", "ruff", lambda repo_path, changed_files: calls.append((repo_path, changed_files)) or ["ran"], "repo_files", ruff_findings_to_evidence
     )
     resolution = registry.resolve(["lint_python", "some_future_capability"])
     assert [tool.tool_name for tool in resolution.supported] == ["ruff"]
     assert resolution.unsupported == ("some_future_capability",)
-    results = registry.execute(resolution, "repo", ["app.py"], "diff")
-    assert results["ruff"] == ["ran"]
+    execution = registry.execute(resolution, "repo", ["app.py"], "diff")
+    assert execution.raw_results["ruff"] == ["ran"]
     assert calls == [("repo", ["app.py"])]
 
 
@@ -114,7 +115,7 @@ def test_unknown_capability_cannot_execute():
     resolution = registry.resolve(["not_registered"])
     assert resolution.supported == ()
     assert resolution.unsupported == ("not_registered",)
-    assert registry.execute(resolution, "repo", ["app.py"], "diff") == {
+    assert registry.execute(resolution, "repo", ["app.py"], "diff").raw_results == {
         "bandit": [], "ruff": [], "test_delta": {}
     }
 
@@ -127,6 +128,7 @@ def test_registry_rejects_forged_registration_without_executing_callable():
         "ruff",
         lambda repo_path, changed_files: calls.append((repo_path, changed_files)),
         "repo_files",
+        ruff_findings_to_evidence,
     )
     forged_resolution = ToolResolution((forged_registration,), ())
 
@@ -144,9 +146,11 @@ def test_review_context_carries_pipeline_state():
         selected_tools=["ruff"],
         unsupported_capabilities=["future"],
         tool_results={"ruff": []},
+        evidence=[{"tool": "ruff"}],
         comments=[{"comment": "unused import"}],
         verdict={"verdict": "comment"},
     )
     assert context.selected_tools == ["ruff"]
     assert context.unsupported_capabilities == ["future"]
+    assert context.evidence == [{"tool": "ruff"}]
     assert context.verdict["verdict"] == "comment"

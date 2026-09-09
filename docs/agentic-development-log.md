@@ -121,3 +121,23 @@ During focused-test collection, pytest treated helper names beginning with
 fixture. The test-delta adapter therefore uses the non-test-prefixed name
 `coverage_delta_to_evidence`; no production tool output or pipeline interface
 changed.
+
+## Phase 2 step 2: trusted registry evidence wiring
+
+Phase 2 Step 2 attaches each existing Evidence adapter to its fixed trusted
+ToolRegistry registration. Registry execution now returns both unchanged raw
+Bandit, Ruff, and test-delta outputs and normalized Evidence aggregated by
+those registration-owned adapters. ReviewContext stores that Evidence beside
+its raw tool results, and both the Planner path and retained Scanner fallback
+use the same registry execution mechanism.
+
+Focused tests cover fixed adapter ownership, normalized Bandit/Ruff/test-delta
+results, clean output, ReviewContext storage, unsupported capabilities, the
+forged-registration boundary, and Scanner fallback evidence. No arbitrary
+shell execution, dynamic imports, LLM-selected callables/adapters, or dynamic
+tool discovery was introduced.
+
+Planner, Reviewer severity handling, Judge behavior, and `verdict/tools.py`
+are intentionally unchanged. Only the three existing Python-oriented tools
+are registered; unsupported capabilities and Docker capability work remain out
+of scope.
