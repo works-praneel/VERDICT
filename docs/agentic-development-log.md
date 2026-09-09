@@ -181,3 +181,68 @@ completed with 54 passing tests.
 Planner, ToolRegistry, Evidence, Docker checking, Scanner fallback, logging,
 and Judge behavior remain unchanged. Judge still receives Reviewer comments,
 rather than independently consuming the evidence bundle.
+
+## Phase 4: Independent Judge
+
+The human-supplied Phase 4 requirement was for Judge to independently assess
+the PR diff and normalized Evidence, treating Reviewer comments as advisory.
+Codex implemented that interface and prompt migration, updated the CLI to pass
+`context.diff`, `context.evidence`, and Reviewer comments, and retained raw
+tool results solely for diagnostics and backwards compatibility.
+
+The deterministic fallback preserves the established blocking treatment for
+high/medium security Evidence and blocking comments, while minor supported
+Evidence or comments yield `comment`; empty or malformed Evidence with no
+comments yields `approve`. Focused tests cover Judge prompt inputs, empty
+input approval, serious Evidence without Reviewer comments, malformed
+Evidence, and normal CLI wiring. Autonomous investigation loops remain out of
+scope.
+
+`pytest -q --ignore=sample_repo` completed with 58 passing tests.
+
+Planner, ToolRegistry, Evidence adapters, Docker checking, Reviewer, Scanner
+fallback, logging, and the verdict vocabulary remain unchanged. The Judge is
+still bounded by the supplied diff and Evidence; it does not independently
+collect new facts.
+
+## Phase 4 evaluation / retrospective
+
+The human supplied the Phase 4 architectural requirements. Codex implemented
+the independent Judge interface and wiring described above. The following
+evaluation was performed manually against the live local LLM; it was not
+performed by Codex.
+
+- **Hardcoded-secret:** Planner source was `llm`. Evidence was a Bandit
+  hardcoded-password finding at low severity; Reviewer produced a blocking
+  security comment; Judge returned `request_changes` with source `llm`. Judge
+  explicitly recognized the hardcoded credential as a security violation
+  despite Bandit's `LOW` severity.
+- **Missing-test:** Planner source was `llm`. Evidence was `test_coverage` for
+  `clamp` with no matching tests. Reviewer produced a test-coverage comment
+  but incorrectly referenced `app.py` line 12 rather than the changed
+  `utils.py` location. Judge returned `request_changes` with source `llm` and
+  correctly reasoned from the missing-test Evidence.
+- **Clean-pr:** Evidence and Reviewer comments were both empty. Judge returned
+  `approve` with source `rule`, confirming that the empty-input fast path
+  avoids an unnecessary LLM Judge call.
+- **Style-issue:** Evidence contained Ruff lint findings plus missing-test
+  coverage; Reviewer produced nitpick/note comments; Judge returned
+  `request_changes` with source `llm`. This is a known policy/severity
+  limitation, not a Phase 4 implementation failure.
+- **Controlled adversarial Reviewer test:** With an added unused import and
+  informational lint Evidence only, Reviewer deliberately claimed a critical
+  security vulnerability. Judge returned `request_changes` with source `llm`,
+  explicitly stated that no evidence supported a security vulnerability, and
+  rejected the Reviewer's blocking claim. It nevertheless judged the unused
+  import sufficient to require correction, demonstrating that Judge does not
+  blindly copy Reviewer comments.
+
+Phase 4 demonstrated independent use of the diff and normalized Evidence,
+including resistance to an unsupported Reviewer claim and the empty-input
+fast path. It did not demonstrate autonomous fact gathering, broader policy
+calibration, or corrected source grounding. The missing-test Reviewer location
+error is a known grounding limitation, and the style-issue outcome is a known
+severity/policy limitation; neither is a reason to undo the independent Judge
+architecture. Phase 4 implementation and controlled evaluation passed and is
+ready for checkpoint v0.4.0. Phase 5 should be designed separately;
+autonomous investigation remains out of scope.

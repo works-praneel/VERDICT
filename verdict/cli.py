@@ -81,7 +81,7 @@ def review(repo_path: str, branch: str, base: str = "main", log_path: str = "ver
     logger.log("reviewer", review_result)
     context.comments = review_result["comments"]
 
-    verdict_result = judge.decide_verdict(context.comments)
+    verdict_result = judge.decide_verdict(context.diff, context.evidence, context.comments)
     logger.log("judge", verdict_result)
     context.verdict = verdict_result
 

@@ -100,7 +100,12 @@ def test_normal_cli_planner_path_returns_registry_normalized_evidence(monkeypatc
         "draft_comments",
         lambda diff, evidence: reviewer_calls.append((diff, evidence)) or {"comments": []},
     )
-    monkeypatch.setattr(cli.judge, "decide_verdict", lambda comments: {"verdict": "approve"})
+    judge_calls = []
+    monkeypatch.setattr(
+        cli.judge,
+        "decide_verdict",
+        lambda diff, evidence, comments: judge_calls.append((diff, evidence, comments)) or {"verdict": "approve"},
+    )
 
     result = cli.review("repo", "feature", log_path=str(tmp_path / "runs.jsonl"))
 
@@ -118,3 +123,4 @@ def test_normal_cli_planner_path_returns_registry_normalized_evidence(monkeypatc
         }
     ]
     assert reviewer_calls == [("diff", result["evidence"])]
+    assert judge_calls == [("diff", result["evidence"], [])]

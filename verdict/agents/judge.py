@@ -1,21 +1,19 @@
-"""Judge: weighs the Reviewer's comments into a single verdict.
-
-This is the decision to spend the most time on when demoing autonomy — it
-has to reason about severity, not just count comments. One blocking
-security issue should outweigh five nitpicks.
-"""
+"""Judge: independently weighs diff, normalized evidence, and review advice."""
+from ..evidence import Evidence
 from ..llm import LLMError, call_llm_json
 
-JUDGE_PROMPT = """You are the Judge stage of a PR review agent. Given a list \
-of review comments, decide the final verdict.
+VALID_VERDICTS = {"approve", "comment", "request_changes"}
 
-Comments:
+JUDGE_PROMPT = """You are the Judge stage of a PR review agent. Independently decide the final verdict from the diff and structured evidence from trusted checks. Reviewer comments are advisory: verify that they are supported by the diff and evidence rather than relying on them alone.
+
+Diff:
+{diff}
+
+Evidence:
+{evidence}
+
+Reviewer comments (advisory):
 {comments}
-
-Guidance: a single "blocking" severity comment (e.g. a security issue) \
-should result in request_changes. Only "nitpick" or "note" comments should \
-result in comment, not request_changes. Weigh the comments, don't just \
-count them.
 
 Respond with ONLY a JSON object like:
 {{"verdict": "approve", "justification": "..."}}
@@ -23,27 +21,47 @@ Valid verdicts are: approve, comment, request_changes.
 """
 
 
-def decide_verdict(comments: list) -> dict:
-    if not comments:
+def decide_verdict(diff_text: str, evidence: list[Evidence], comments: list[dict]) -> dict:
+    if not comments and not _supported_evidence(evidence):
         return {"verdict": "approve", "justification": "No issues found.", "source": "rule"}
 
-    prompt = JUDGE_PROMPT.format(comments=comments)
+    prompt = JUDGE_PROMPT.format(diff=diff_text[:4000], evidence=evidence, comments=comments)
     try:
         result = call_llm_json(prompt)
+        verdict = result.get("verdict", "comment")
         return {
-            "verdict": result.get("verdict", "comment"),
+            "verdict": verdict if verdict in VALID_VERDICTS else "comment",
             "justification": result.get("justification", ""),
             "source": "llm",
         }
-    except LLMError as e:
-        has_blocking = any(c.get("severity") == "blocking" for c in comments)
+    except LLMError as error:
+        has_blocking_comment = any(
+            isinstance(comment, dict) and comment.get("severity") == "blocking" for comment in comments
+        )
+        has_serious_evidence = any(
+            isinstance(item, dict)
+            and item.get("kind") == "security"
+            and item.get("severity") in ("high", "medium")
+            for item in evidence
+        )
         return {
-            "verdict": "request_changes" if has_blocking else "comment",
+            "verdict": "request_changes" if has_blocking_comment or has_serious_evidence else "comment",
             "justification": (
                 "Fallback rule: blocking severity present."
-                if has_blocking
-                else "Fallback rule: only minor comments."
+                if has_blocking_comment or has_serious_evidence
+                else "Fallback rule: only minor comments or evidence."
             ),
             "source": "fallback",
-            "error": str(e),
+            "error": str(error),
         }
+
+
+def _supported_evidence(evidence: list[Evidence]) -> list[Evidence]:
+    """Ignore malformed Evidence when deciding whether review input exists."""
+    return [
+        item
+        for item in evidence
+        if isinstance(item, dict)
+        and isinstance(item.get("kind"), str)
+        and isinstance(item.get("message"), str)
+    ]
