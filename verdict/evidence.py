@@ -116,3 +116,39 @@ def coverage_delta_to_evidence(result: object) -> list[Evidence]:
             },
         }
     ]
+
+
+def docker_base_image_pinning_to_evidence(findings: object) -> list[Evidence]:
+    """Normalize deterministic Dockerfile base-image pinning findings."""
+    if not isinstance(findings, list):
+        return []
+
+    evidence = []
+    for finding in findings:
+        if not isinstance(finding, dict):
+            continue
+        file = finding.get("file")
+        image = finding.get("image")
+        reason = finding.get("reason")
+        if not isinstance(file, str) or not isinstance(image, str) or reason not in {"untagged", "latest"}:
+            continue
+        line = finding.get("line")
+        message = (
+            f"Base image '{image}' uses the mutable :latest tag."
+            if reason == "latest"
+            else f"Base image '{image}' is untagged."
+        )
+        evidence.append(
+            {
+                "capability": "check_container_base_image_pinning",
+                "tool": "check_container_base_image_pinning",
+                "kind": "container",
+                "file": file,
+                "line": line if isinstance(line, int) else None,
+                "message": message,
+                "severity": "info",
+                "rule_id": "docker_base_image_not_pinned",
+                "details": {"image": image, "reason": reason},
+            }
+        )
+    return evidence

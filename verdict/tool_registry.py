@@ -7,6 +7,7 @@ from .evidence import (
     Evidence,
     bandit_findings_to_evidence,
     coverage_delta_to_evidence,
+    docker_base_image_pinning_to_evidence,
     ruff_findings_to_evidence,
 )
 
@@ -54,6 +55,13 @@ class ToolRegistry:
                 "diff_files",
                 coverage_delta_to_evidence,
             ),
+            "check_container_base_image_pinning": ToolRegistration(
+                "check_container_base_image_pinning",
+                "check_container_base_image_pinning",
+                tools.check_container_base_image_pinning,
+                "diff_files",
+                docker_base_image_pinning_to_evidence,
+            ),
         }
         self._scanner_tool_capabilities = {
             "bandit": "detect_python_security",
@@ -96,7 +104,8 @@ class ToolRegistry:
                 results[registration.tool_name] = raw_result
             elif registration.argument_style == "diff_files":
                 raw_result = registration.function(diff_text, changed_files)
-                results["test_delta"] = raw_result
+                result_key = "test_delta" if registration.tool_name == "check_test_delta" else registration.tool_name
+                results[result_key] = raw_result
             else:  # Defensive: registrations are internal and must declare a known calling convention.
                 raise RuntimeError(f"Unsupported trusted tool registration: {registration.capability}")
             evidence.extend(registration.evidence_adapter(raw_result))

@@ -141,3 +141,25 @@ Planner, Reviewer severity handling, Judge behavior, and `verdict/tools.py`
 are intentionally unchanged. Only the three existing Python-oriented tools
 are registered; unsupported capabilities and Docker capability work remain out
 of scope.
+
+## Phase 2 step 3: Dockerfile base-image pinning
+
+Phase 2 Step 3 adds the semantic capability
+`check_container_base_image_pinning`. Its trusted deterministic checker reads
+only changed Dockerfile diff lines and flags added `FROM` instructions that
+are untagged or explicitly use `:latest`; ordinary version tags such as
+`python:3.12` and `ubuntu:24.04` are accepted. Findings are normalized through
+the registry-owned Evidence adapter with Dockerfile source location, image,
+and reason attribution.
+
+Docker Engine, Docker Desktop, image builds, containers, network calls, and
+new dependencies are not required because the policy is static diff analysis.
+Focused tests cover untagged and `:latest` findings, accepted version tags,
+clean diffs, registry resolution, and normalized Evidence. The trusted
+registration boundary remains unchanged: the Planner selects only semantic
+capabilities, while fixed registrations own the callable and adapter.
+
+Version tags themselves can still be mutable; digest pinning is a stronger
+future policy and is intentionally not implemented here. Scanner fallback,
+Reviewer severity logic, Judge behavior, the Evidence contract, and all later
+Phase 2 work remain unchanged.

@@ -123,3 +123,47 @@ def check_test_delta(diff_text: str, changed_files: list) -> dict:
         "test_files_touched": test_files_touched,
         "missing_coverage": missing_coverage,
     }
+
+
+def check_container_base_image_pinning(diff_text: str, changed_files: list) -> list[dict]:
+    """Find added Dockerfile FROM instructions without a version pin.
+
+    This deliberately inspects diff text only. It does not require, contact, or
+    execute Docker in any form.
+    """
+    dockerfiles = [path for path in changed_files if Path(path).name.lower() == "dockerfile"]
+    current_file = dockerfiles[0] if len(dockerfiles) == 1 else None
+    current_line = None
+    findings = []
+
+    for diff_line in diff_text.splitlines():
+        if diff_line.startswith("+++ b/"):
+            current_file = diff_line[6:]
+            continue
+        hunk = re.match(r"@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@", diff_line)
+        if hunk:
+            current_line = int(hunk.group(1))
+            continue
+        if diff_line.startswith("+") and not diff_line.startswith("+++"):
+            added_line = diff_line[1:]
+            match = re.match(r"\s*FROM\s+(?:--\S+\s+)*([^\s#]+)", added_line, re.IGNORECASE)
+            if current_file and Path(current_file).name.lower() == "dockerfile" and match:
+                image = match.group(1)
+                image_name = image.rsplit("/", 1)[-1]
+                is_latest = image_name.endswith(":latest")
+                is_untagged = "@" not in image and ":" not in image_name
+                if is_latest or is_untagged:
+                    findings.append(
+                        {
+                            "file": current_file,
+                            "line": current_line,
+                            "image": image,
+                            "reason": "latest" if is_latest else "untagged",
+                        }
+                    )
+            if current_line is not None:
+                current_line += 1
+        elif not diff_line.startswith("-") and current_line is not None:
+            current_line += 1
+
+    return findings

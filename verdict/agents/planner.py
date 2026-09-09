@@ -7,6 +7,7 @@ KNOWN_CAPABILITIES = (
     "detect_python_security",
     "lint_python",
     "check_new_python_test_coverage",
+    "check_container_base_image_pinning",
 )
 CONCRETE_TOOL_NAMES = {"bandit", "ruff", "check_test_delta"}
 CAPABILITY_ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -19,6 +20,7 @@ The initial available semantic capabilities are:
 - detect_python_security: inspect changed Python source for security issues
 - lint_python: inspect changed Python files for lint/style issues
 - check_new_python_test_coverage: check new non-test Python functions for matching tests
+- check_container_base_image_pinning: inspect added Dockerfile base-image tags
 
 Never return concrete tool names, commands, shell snippets, or executable code.
 Do not use names such as bandit, ruff, or check_test_delta.
