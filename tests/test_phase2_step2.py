@@ -94,7 +94,12 @@ def test_normal_cli_planner_path_returns_registry_normalized_evidence(monkeypatc
         "run_bandit",
         lambda repo, files: [{"file": "app.py", "line": 2, "issue": "secret", "severity": "HIGH"}],
     )
-    monkeypatch.setattr(cli.reviewer, "draft_comments", lambda *args: {"comments": []})
+    reviewer_calls = []
+    monkeypatch.setattr(
+        cli.reviewer,
+        "draft_comments",
+        lambda diff, evidence: reviewer_calls.append((diff, evidence)) or {"comments": []},
+    )
     monkeypatch.setattr(cli.judge, "decide_verdict", lambda comments: {"verdict": "approve"})
 
     result = cli.review("repo", "feature", log_path=str(tmp_path / "runs.jsonl"))
@@ -112,3 +117,4 @@ def test_normal_cli_planner_path_returns_registry_normalized_evidence(monkeypatc
             "details": {"source_severity": "HIGH"},
         }
     ]
+    assert reviewer_calls == [("diff", result["evidence"])]

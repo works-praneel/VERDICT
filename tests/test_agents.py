@@ -20,20 +20,40 @@ def test_scanner_fallback_skips_test_delta_for_test_only_change():
 
 
 def test_reviewer_fallback_empty_when_no_findings():
-    result = reviewer._fallback_comments([], [], {"missing_coverage": False})
+    result = reviewer._fallback_comments([])
     assert result["comments"] == []
 
 
 def test_reviewer_fallback_maps_high_severity_to_blocking():
-    bandit_findings = [{"file": "app.py", "line": 1, "issue": "eval used", "severity": "HIGH"}]
-    result = reviewer._fallback_comments(bandit_findings, [], {"missing_coverage": False})
+    evidence = [{"kind": "security", "file": "app.py", "line": 1, "message": "eval used", "severity": "high"}]
+    result = reviewer._fallback_comments(evidence)
     assert result["comments"][0]["severity"] == "blocking"
 
 
 def test_reviewer_fallback_maps_low_severity_to_nitpick():
-    bandit_findings = [{"file": "app.py", "line": 1, "issue": "hardcoded password", "severity": "LOW"}]
-    result = reviewer._fallback_comments(bandit_findings, [], {"missing_coverage": False})
+    evidence = [{"kind": "security", "file": "app.py", "line": 1, "message": "hardcoded password", "severity": "low"}]
+    result = reviewer._fallback_comments(evidence)
     assert result["comments"][0]["severity"] == "nitpick"
+
+
+def test_reviewer_fallback_maps_lint_and_test_coverage_evidence():
+    result = reviewer._fallback_comments(
+        [
+            {"kind": "lint", "file": "app.py", "line": 2, "message": "unused import", "severity": "info"},
+            {"kind": "test_coverage", "file": "", "line": None, "message": "missing test", "severity": "info"},
+        ]
+    )
+    assert [comment["severity"] for comment in result["comments"]] == ["nitpick", "note"]
+
+
+def test_reviewer_accepts_normalized_evidence_in_llm_prompt(monkeypatch):
+    captured = []
+    monkeypatch.setattr(reviewer, "call_llm_json", lambda prompt: captured.append(prompt) or {"comments": []})
+
+    result = reviewer.draft_comments("diff", [{"kind": "lint", "message": "unused import"}])
+
+    assert result["comments"] == []
+    assert "Evidence:" in captured[0]
 
 
 def test_judge_approves_with_no_comments():

@@ -163,3 +163,21 @@ Version tags themselves can still be mutable; digest pinning is a stronger
 future policy and is intentionally not implemented here. Scanner fallback,
 Reviewer severity logic, Judge behavior, the Evidence contract, and all later
 Phase 2 work remain unchanged.
+
+## Phase 3: Reviewer Evidence Migration
+
+Phase 3 migrates Reviewer to accept the diff and normalized Evidence rather
+than tool-specific raw Bandit, Ruff, and test-delta inputs. Raw tool results
+remain in ReviewContext for diagnostics and backwards compatibility, while the
+normal CLI path supplies `context.evidence` to Reviewer.
+
+The deterministic fallback preserves the existing mapping: high/medium
+security Evidence produces blocking comments, lower-severity security and lint
+Evidence produce nitpicks, and test-coverage Evidence produces notes. Focused
+tests cover the normalized prompt input, each fallback mapping, clean
+Evidence, and normal CLI evidence propagation; `pytest -q --ignore=sample_repo`
+completed with 54 passing tests.
+
+Planner, ToolRegistry, Evidence, Docker checking, Scanner fallback, logging,
+and Judge behavior remain unchanged. Judge still receives Reviewer comments,
+rather than independently consuming the evidence bundle.

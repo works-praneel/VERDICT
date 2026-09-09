@@ -77,12 +77,7 @@ def review(repo_path: str, branch: str, base: str = "main", log_path: str = "ver
 
     logger.log("scan_results", context.tool_results)
 
-    review_result = reviewer.draft_comments(
-        context.diff,
-        context.tool_results["bandit"],
-        context.tool_results["ruff"],
-        context.tool_results["test_delta"],
-    )
+    review_result = reviewer.draft_comments(context.diff, context.evidence)
     logger.log("reviewer", review_result)
     context.comments = review_result["comments"]
 
