@@ -97,3 +97,27 @@ v0 used a Scanner-selected concrete-tool flow. Phase 1 adds a semantic Planner a
 ## 14. Phase 1 acceptance status
 
 Phase 1 is accepted based on the implemented Planner-first path, preserved v0 Scanner fallback, enforced trusted registry dispatch, focused regression tests, and the recorded controlled live run. Commit and push were intentionally not performed during development.
+
+## Phase 2 step 1: normalized evidence adapters
+
+Phase 2 step 1 added `verdict/evidence.py` without changing the existing tool
+implementations, Planner, ToolRegistry, CLI, Reviewer, or Judge. It defines a
+minimal JSON-serializable `Evidence` contract and deterministic adapters for
+the current Bandit, Ruff, and test-delta result shapes.
+
+The adapters preserve capability and source-tool attribution, return no
+evidence for clean results, and skip malformed records rather than raising.
+Bandit source severities normalize to `high`, `medium`, or `low`; Ruff and
+test-delta evidence use `info`. The test-delta adapter emits evidence only
+when its existing `missing_coverage` flag is exactly `True`.
+
+Focused tests cover one normalized finding for each existing tool, clean
+results, malformed inputs, allowed normalized severities, and JSON
+serialization. Dockerfile capability work, ToolRegistry evidence wiring, and
+Reviewer migration remain later Phase 2 steps.
+
+During focused-test collection, pytest treated helper names beginning with
+`test_` as test functions and attempted to supply their `result` argument as a
+fixture. The test-delta adapter therefore uses the non-test-prefixed name
+`coverage_delta_to_evidence`; no production tool output or pipeline interface
+changed.
