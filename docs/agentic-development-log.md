@@ -246,3 +246,22 @@ severity/policy limitation; neither is a reason to undo the independent Judge
 architecture. Phase 4 implementation and controlled evaluation passed and is
 ready for checkpoint v0.4.0. Phase 5 should be designed separately;
 autonomous investigation remains out of scope.
+
+## Phase 5 Step 1: investigation goal and state
+
+The human architectural requirement for this step was a minimal bounded
+representation for semantic investigation goals and state, without an
+investigation loop or new capabilities. Codex added immutable
+`InvestigationGoal` records with a question, semantic required capability, and
+reason; concrete known tool names and malformed capability IDs are rejected.
+
+Codex also added `InvestigationState` to `ReviewContext`, recording the
+current/next round, requested goals, completed capabilities, and unresolved
+goals. This is pipeline state only: no Planner, Reviewer, Judge, ToolRegistry,
+CLI, LLM, tool, or execution behavior changed. Focused tests cover valid and
+invalid goals, empty state initialization, completed-capability tracking, and
+unresolved goals. Autonomous investigation, persistence, web access, shell
+execution, and code modification remain out of scope.
+
+`pytest -q --ignore=sample_repo` completed with 64 passing tests.
+The capability validation was subsequently decoupled from the context model so that ToolRegistry remains authoritative for supported capabilities; the regression suite remained green with 64 passing tests.

@@ -69,7 +69,8 @@ def test_judge_fallback_blocks_on_blocking_comment(monkeypatch):
     assert result["verdict"] == "request_changes"
 
 
-def test_judge_fallback_comments_on_nitpick_only():
+def test_judge_fallback_comments_on_nitpick_only(monkeypatch):
+    monkeypatch.setattr(judge, "call_llm_json", lambda prompt: (_ for _ in ()).throw(LLMError("offline")))
     comments = [{"severity": "nitpick", "comment": "unused import"}]
     result = judge.decide_verdict("diff", [], comments)
     assert result["verdict"] == "comment"
