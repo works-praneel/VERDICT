@@ -265,3 +265,21 @@ execution, and code modification remain out of scope.
 
 `pytest -q --ignore=sample_repo` completed with 64 passing tests.
 The capability validation was subsequently decoupled from the context model so that ToolRegistry remains authoritative for supported capabilities; the regression suite remained green with 64 passing tests.
+
+## Phase 5 Step 2: Investigation Planner
+
+The human architectural requirement was a bounded planner that returns only
+validated investigation intent from the diff, accumulated normalized Evidence,
+Reviewer comments, and current InvestigationState, without tool execution or
+an investigation loop. Codex added `investigation_planner`, which produces
+`investigate` plus `InvestigationGoal` records, accepts semantic capability
+IDs only, and never accesses ToolRegistry or executes a capability.
+
+Malformed LLM output, concrete tool names, arbitrary commands, and LLM
+failures deterministically return an empty non-investigating fallback; no goals
+are invented. Focused LLM-stubbed tests cover valid empty and multi-goal
+responses, invalid output, rejected tools/commands, and fallback behavior.
+Planner, Reviewer, Judge, ToolRegistry, CLI, tools, and LLM wrapper behavior
+remain unchanged.
+
+`pytest -q --ignore=sample_repo` completed with 72 passing tests. The implementation was subsequently reviewed and decoupled from the Planner's `KNOWN_CAPABILITIES` list so that the Investigation Planner emits semantic intent while ToolRegistry remains authoritative for capability support. An additional regression test confirmed that unknown semantic capability IDs can remain valid intent without implying execution support.
