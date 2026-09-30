@@ -124,14 +124,32 @@ def review(
             if not investigate or not goals:
                 break
 
-            context.investigation.current_round = round_num
-            context.investigation.requested_goals.extend(goals)
+            known_capabilities = (
+                context.investigation.completed_capabilities
+                | {
+                    goal.required_capability
+                    for goal in context.investigation.unresolved_goals
+                }
+            )
 
-            requested_capabilities = [g.required_capability for g in goals]
+            new_goals = [
+                goal
+                for goal in goals
+                if goal.required_capability not in known_capabilities
+            ]
+
+            context.investigation.requested_goals.extend(new_goals)
+
+            if not new_goals:
+                break
+
+            context.investigation.current_round = round_num
+
+            requested_capabilities = [g.required_capability for g in new_goals]
             resolution = registry.resolve(requested_capabilities)
 
             supported_caps = {tool.capability for tool in resolution.supported}
-            for g in goals:
+            for g in new_goals:
                 if g.required_capability not in supported_caps:
                     context.investigation.unresolved_goals.append(g)
 

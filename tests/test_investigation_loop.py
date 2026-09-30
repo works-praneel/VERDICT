@@ -213,13 +213,22 @@ def test_max_rounds_termination(mock_review_env, monkeypatch, tmp_path):
     def endless_investigation(diff, evidence, comments, state):
         nonlocal planner_calls
         planner_calls += 1
+
+        capabilities = [
+            "detect_python_security",
+            "check_container_base_image_pinning",
+            "lint_python",
+        ]
+
+        capability = capabilities[state.current_round]
+
         return {
             "investigate": True,
             "goals": [
                 InvestigationGoal(
-                    question="Still need facts?",
-                    required_capability="detect_python_security",
-                    reason="Ongoing check.",
+                    question=f"Need facts for {capability}?",
+                    required_capability=capability,
+                    reason="Ongoing investigation.",
                 )
             ],
             "source": "llm",
@@ -290,6 +299,126 @@ def test_unsupported_capability_request(mock_review_env, monkeypatch, tmp_path):
     assert len(result["investigation"]["unresolved_goals"]) == 1
     assert result["investigation"]["unresolved_goals"][0]["required_capability"] == "trace_external_taint"
 
+
+def test_repeated_unsupported_capability_is_not_reinvestigated(
+    mock_review_env, monkeypatch, tmp_path
+):
+    """An unsupported capability is recorded once and not retried in a later round."""
+    planner_calls = []
+
+    def mock_plan(diff, evidence, comments, state):
+        planner_calls.append(state.current_round)
+        return {
+            "investigate": True,
+            "goals": [
+                InvestigationGoal(
+                    question="Trace external taint?",
+                    required_capability="trace_external_taint",
+                    reason="Need deep dataflow analysis.",
+                )
+            ],
+            "source": "llm",
+        }
+
+    monkeypatch.setattr(
+        cli.investigation_planner,
+        "plan_investigation",
+        mock_plan,
+    )
+    monkeypatch.setattr(
+        cli.reviewer,
+        "draft_comments",
+        lambda diff, evidence: {"comments": [], "source": "llm"},
+    )
+    monkeypatch.setattr(
+        cli.judge,
+        "decide_verdict",
+        lambda diff, evidence, comments: {
+            "verdict": "comment",
+            "source": "llm",
+        },
+    )
+
+    result = cli.review(
+        "repo",
+        "feature",
+        log_path=str(tmp_path / "runs.jsonl"),
+        max_rounds=2,
+    )
+
+    assert planner_calls == [0, 1]
+    assert result["investigation"]["current_round"] == 1
+    assert len(result["investigation"]["requested_goals"]) == 1
+    assert len(result["investigation"]["unresolved_goals"]) == 1
+    assert result["investigation"]["unresolved_goals"][0]["required_capability"] == (
+        "trace_external_taint"
+    )
+
+
+def test_repeated_completed_capability_is_not_reinvestigated(
+    mock_review_env, monkeypatch, tmp_path
+):
+    """A capability already completed is not executed again."""
+    planner_calls = []
+    ruff_calls = []
+
+    def mock_ruff(repo, files):
+        ruff_calls.append(True)
+        return [
+            {
+                "file": "app.py",
+                "line": 1,
+                "issue": "unused import",
+                "code": "F401",
+            }
+        ]
+
+    monkeypatch.setattr(tools, "run_ruff", mock_ruff)
+
+    def mock_plan(diff, evidence, comments, state):
+        planner_calls.append(state.current_round)
+        return {
+            "investigate": True,
+            "goals": [
+                InvestigationGoal(
+                    question="Check lint again?",
+                    required_capability="lint_python",
+                    reason="Verify lint findings.",
+                )
+            ],
+            "source": "llm",
+        }
+
+    monkeypatch.setattr(
+        cli.investigation_planner,
+        "plan_investigation",
+        mock_plan,
+    )
+    monkeypatch.setattr(
+        cli.reviewer,
+        "draft_comments",
+        lambda diff, evidence: {"comments": [], "source": "llm"},
+    )
+    monkeypatch.setattr(
+        cli.judge,
+        "decide_verdict",
+        lambda diff, evidence, comments: {
+            "verdict": "approve",
+            "source": "llm",
+        },
+    )
+
+    result = cli.review(
+        "repo",
+        "feature",
+        log_path=str(tmp_path / "runs.jsonl"),
+        max_rounds=2,
+    )
+
+    assert planner_calls == [0]
+    assert len(ruff_calls) == 1
+    assert result["investigation"]["current_round"] == 0
+    assert result["investigation"]["requested_goals"] == []
 
 def test_investigation_planner_failure_fallback(mock_review_env, monkeypatch, tmp_path):
     """When LLM raises LLMError during investigation planning, fallback cleanly continues to Judge."""

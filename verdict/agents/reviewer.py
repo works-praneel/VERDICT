@@ -2,7 +2,16 @@
 from ..evidence import Evidence
 from ..llm import LLMError, call_llm_json
 
-REVIEWER_PROMPT = """You are the Reviewer stage of a PR review agent. You are given a diff and structured evidence from trusted automated checks. Draft review comments only for things that genuinely matter -- if the PR is clean, return an empty list. Never invent issues that are not supported by the diff or evidence.
+REVIEWER_PROMPT = """You are the Reviewer stage of a PR review agent. You are given a diff and structured evidence from trusted automated checks. Draft review comments only for things that genuinely matter -- if the PR is clean, return an empty list.
+
+Evidence is authoritative. Do not invent issues, file names, line numbers, or other facts that are not supported by the diff or evidence.
+
+For every review comment:
+- "file" must refer to a file actually present in the diff or explicitly identified by the evidence.
+- "line" must use a line number explicitly supported by the diff or evidence.
+- If the evidence does not provide a file or line number, use an empty string for "file" and null for "line".
+- Never infer or guess a file or line number from context.
+- Do not copy file names or line numbers from the example below.
 
 Diff:
 {diff}
@@ -12,7 +21,12 @@ Evidence:
 
 Respond with ONLY a JSON object like:
 {{"comments": [{{"severity": "blocking", "file": "app.py", "line": 12, "comment": "..."}}]}}
+
+If a finding has no supported file or line, respond using:
+{{"comments": [{{"severity": "note", "file": "", "line": null, "comment": "..."}}]}}
+
 If there is nothing worth commenting on, respond with {{"comments": []}}.
+
 Valid severities are: blocking, nitpick, note.
 """
 
@@ -52,7 +66,7 @@ def _fallback_comments(evidence: list[Evidence]) -> dict:
             {
                 "severity": severity,
                 "file": file,
-                "line": line if isinstance(line, int) else 0,
+                "line": line if isinstance(line, int) else None,
                 "comment": message,
             }
         )

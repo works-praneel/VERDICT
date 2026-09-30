@@ -1,7 +1,7 @@
 """Tests for each agent's deterministic fallback path — these run without
 Ollama so they work in any environment. The LLM path is exercised manually
 once a local model is available (see README)."""
-from verdict.agents import judge, reviewer, scanner
+from verdict.agents import judge, planner, reviewer, scanner
 from verdict.llm import LLMError
 
 
@@ -19,6 +19,33 @@ def test_scanner_fallback_skips_test_delta_for_test_only_change():
     result = scanner._fallback_rule(["tests/test_app.py"])
     assert "check_test_delta" not in result["tools"]
 
+def test_planner_selects_test_coverage_for_new_python_function(monkeypatch):
+    captured = []
+
+    monkeypatch.setattr(
+        planner,
+        "call_llm_json",
+        lambda prompt: captured.append(prompt)
+        or {
+            "capabilities": [
+                "lint_python",
+                "check_new_python_test_coverage",
+            ],
+            "reason": "A new non-test Python function was added.",
+        },
+    )
+
+    result = planner.plan(
+        ["utils.py"],
+        """
++def clamp(value, low, high):
++    return max(low, min(value, high))
+""",
+    )
+
+    assert "check_new_python_test_coverage" in result["capabilities"]
+    assert "utils.py" in captured[0]
+    assert "check_new_python_test_coverage" in captured[0]
 
 def test_reviewer_fallback_empty_when_no_findings():
     result = reviewer._fallback_comments([])
@@ -45,6 +72,8 @@ def test_reviewer_fallback_maps_lint_and_test_coverage_evidence():
         ]
     )
     assert [comment["severity"] for comment in result["comments"]] == ["nitpick", "note"]
+    assert result["comments"][1]["file"] == ""
+    assert result["comments"][1]["line"] is None
 
 
 def test_reviewer_accepts_normalized_evidence_in_llm_prompt(monkeypatch):
