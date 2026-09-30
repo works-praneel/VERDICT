@@ -28,6 +28,7 @@ def test_investigation_state_initializes_without_an_investigation_loop():
     assert state.requested_goals == []
     assert state.completed_capabilities == set()
     assert state.unresolved_goals == []
+    assert state.evidence == []
 
 
 def test_investigation_state_tracks_completed_capabilities_and_unresolved_goals():
@@ -38,3 +39,11 @@ def test_investigation_state_tracks_completed_capabilities_and_unresolved_goals(
 
     assert context.investigation.completed_capabilities == {"lint_python"}
     assert context.investigation.unresolved_goals == [goal]
+
+
+def test_investigation_state_tracks_accumulated_evidence():
+    evidence_item = {"capability": "lint_python", "tool": "ruff", "message": "style"}
+    state = InvestigationState(evidence=[evidence_item])
+    context = ReviewContext(investigation=state)
+
+    assert context.investigation.evidence == [evidence_item]

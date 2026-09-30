@@ -34,6 +34,7 @@ class InvestigationState:
     requested_goals: list[InvestigationGoal] = field(default_factory=list)
     completed_capabilities: set[str] = field(default_factory=set)
     unresolved_goals: list[InvestigationGoal] = field(default_factory=list)
+    evidence: list[dict] = field(default_factory=list)
 
     @property
     def next_round(self) -> int:
