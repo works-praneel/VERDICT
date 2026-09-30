@@ -14,6 +14,11 @@ import sys
 from git import Repo
 
 from verdict.agents import judge, reviewer, scanner
+from verdict.evidence import (
+    bandit_findings_to_evidence,
+    coverage_delta_to_evidence,
+    ruff_findings_to_evidence,
+)
 from verdict.llm import LLMError, call_llm
 from verdict.tools import check_test_delta, get_diff, run_bandit, run_ruff
 
@@ -67,8 +72,15 @@ def run_scenario(branch, expected_verdict, expected_reason):
     print(f"Ruff findings: {ruff_findings}")
     print(f"Test delta: {test_delta}")
 
+    evidence = [
+        *bandit_findings_to_evidence(bandit_findings),
+        *ruff_findings_to_evidence(ruff_findings),
+        *coverage_delta_to_evidence(test_delta),
+    ]
+    print(f"Evidence: {evidence}")
+
     # --- Reviewer ---
-    review_result = reviewer.draft_comments(diff["diff_text"], bandit_findings, ruff_findings, test_delta)
+    review_result = reviewer.draft_comments(diff["diff_text"], evidence)
     print(f"\n[Reviewer] source={review_result['source']}")
     for c in review_result["comments"]:
         print(f"  - {c['severity']}: {c['comment']}")
@@ -76,7 +88,7 @@ def run_scenario(branch, expected_verdict, expected_reason):
         print(f"  >> LLM path did NOT run for Reviewer. Error: {review_result.get('error', 'unknown')}")
 
     # --- Judge ---
-    verdict_result = judge.decide_verdict(review_result["comments"])
+    verdict_result = judge.decide_verdict(diff["diff_text"], evidence, review_result["comments"])
     print(f"\n[Judge] source={verdict_result['source']} verdict={verdict_result['verdict']}")
     print(f"[Judge] justification: {verdict_result['justification']}")
     if verdict_result["source"] != "llm" and verdict_result["source"] != "rule":
