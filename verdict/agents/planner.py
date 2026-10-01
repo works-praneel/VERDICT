@@ -3,12 +3,6 @@ import re
 
 from ..llm import LLMError, call_llm_json
 
-KNOWN_CAPABILITIES = (
-    "detect_python_security",
-    "lint_python",
-    "check_new_python_test_coverage",
-    "check_container_base_image_pinning",
-)
 CONCRETE_TOOL_NAMES = {"bandit", "ruff", "check_test_delta"}
 CAPABILITY_ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
