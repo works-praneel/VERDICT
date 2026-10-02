@@ -70,7 +70,39 @@ def test_planner_failure_uses_v0_scanner(monkeypatch):
     monkeypatch.setattr(cli.scanner, "decide_tools", lambda files: {"tools": ["ruff"], "source": "fallback"})
     route = cli._plan_or_fallback({"changed_files": ["app.py"], "diff_text": ""})
     assert route["path"] == "scanner_fallback"
-    assert route["decision"]["tools"] == ["ruff"]
+    assert set(route["decision"]["tools"]) == {
+        "bandit",
+        "ruff",
+        "check_test_delta",
+    }
+
+
+def test_planner_fallback_enforces_docker_base_image_check(monkeypatch):
+    from verdict import cli
+
+    monkeypatch.setattr(
+        cli.planner,
+        "plan",
+        lambda *args: (_ for _ in ()).throw(
+            cli.planner.PlannerError("malformed planner response")
+        ),
+    )
+    monkeypatch.setattr(
+        cli.scanner,
+        "decide_tools",
+        lambda files: {"tools": [], "source": "llm"},
+    )
+
+    route = cli._plan_or_fallback(
+        {
+            "changed_files": ["Dockerfile"],
+            "diff_text": "+++ b/Dockerfile\n@@ -0,0 +1 @@\n+FROM python:latest\n",
+        }
+    )
+
+    assert route["decision"]["tools"] == [
+        "check_container_base_image_pinning",
+    ]
 
 
 def test_registry_resolves_capability_to_registered_tool():
@@ -154,3 +186,118 @@ def test_review_context_carries_pipeline_state():
     assert context.unsupported_capabilities == ["future"]
     assert context.evidence == [{"tool": "ruff"}]
     assert context.verdict["verdict"] == "comment"
+
+def test_required_python_test_coverage_is_added_when_planner_omits_it():
+    from verdict.cli import _enforce_required_capabilities
+
+    decision = {
+        "capabilities": ["lint_python"],
+        "reason": "Python changed",
+        "source": "llm",
+    }
+
+    result = _enforce_required_capabilities(
+        decision,
+        ["utils.py"],
+        "diff --git a/utils.py b/utils.py\n"
+        "--- a/utils.py\n"
+        "+++ b/utils.py\n"
+        "+def clamp(value, low, high):\n"
+        "+    return max(low, min(value, high))\n",
+    )
+
+    assert result["capabilities"] == [
+        "lint_python",
+        "check_new_python_test_coverage",
+    ]
+
+
+def test_required_python_test_coverage_is_not_added_for_test_files():
+    from verdict.cli import _enforce_required_capabilities
+
+    decision = {
+        "capabilities": ["lint_python"],
+        "reason": "Python changed",
+        "source": "llm",
+    }
+
+    result = _enforce_required_capabilities(
+        decision,
+        ["tests/test_utils.py"],
+        "diff --git a/tests/test_utils.py b/tests/test_utils.py\n"
+        "--- a/tests/test_utils.py\n"
+        "+++ b/tests/test_utils.py\n"
+        "+def test_clamp():\n"
+        "+    assert clamp(5, 1, 10) == 5\n",
+    )
+
+    assert result["capabilities"] == ["lint_python"]
+
+
+def test_required_python_test_coverage_is_not_duplicated():
+    from verdict.cli import _enforce_required_capabilities
+
+    decision = {
+        "capabilities": [
+            "lint_python",
+            "check_new_python_test_coverage",
+        ],
+        "reason": "Python changed",
+        "source": "llm",
+    }
+
+    result = _enforce_required_capabilities(
+        decision,
+        ["utils.py"],
+        "diff --git a/utils.py b/utils.py\n"
+        "--- a/utils.py\n"
+        "+++ b/utils.py\n"
+        "+def clamp(value, low, high):\n"
+        "+    return value\n",
+    )
+
+    assert result["capabilities"] == [
+        "lint_python",
+        "check_new_python_test_coverage",
+    ]
+
+
+def test_required_lint_is_added_when_planner_omits_it():
+    from verdict.cli import _enforce_required_capabilities
+
+    result = _enforce_required_capabilities(
+        {"capabilities": [], "reason": "Python changed"},
+        ["app.py"],
+        "+++ b/app.py\n@@ -1 +1 @@\n-old = 1\n+new = 2\n",
+    )
+
+    assert result["capabilities"] == [
+        "lint_python",
+        "check_new_python_test_coverage",
+    ]
+
+
+def test_required_docker_check_is_added_for_added_from_instruction():
+    from verdict.cli import _enforce_required_capabilities
+
+    result = _enforce_required_capabilities(
+        {"capabilities": [], "reason": "Container base image changed"},
+        ["Dockerfile"],
+        "+++ b/Dockerfile\n@@ -0,0 +1 @@\n+FROM python:latest\n",
+    )
+
+    assert result["capabilities"] == [
+        "check_container_base_image_pinning",
+    ]
+
+
+def test_required_docker_check_is_not_added_for_non_from_change():
+    from verdict.cli import _enforce_required_capabilities
+
+    result = _enforce_required_capabilities(
+        {"capabilities": [], "reason": "Build command changed"},
+        ["Dockerfile"],
+        "+++ b/Dockerfile\n@@ -1 +1 @@\n-RUN echo old\n+RUN echo new\n",
+    )
+
+    assert result["capabilities"] == []

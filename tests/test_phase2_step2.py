@@ -82,6 +82,9 @@ def test_normal_cli_planner_path_returns_registry_normalized_evidence(monkeypatc
             self.head = SimpleNamespace(is_detached=False)
             self.git = SimpleNamespace(checkout=lambda branch: None)
 
+        def is_dirty(self, untracked_files=False):
+            return False
+
     monkeypatch.setattr(cli, "get_diff", lambda *args: {"changed_files": ["app.py"], "diff_text": "diff"})
     monkeypatch.setattr(
         cli.planner,
@@ -124,3 +127,39 @@ def test_normal_cli_planner_path_returns_registry_normalized_evidence(monkeypatc
     ]
     assert reviewer_calls == [("diff", result["evidence"])]
     assert judge_calls == [("diff", result["evidence"], [])]
+
+
+def test_cli_refuses_dirty_repository_before_branch_checkout(monkeypatch, tmp_path):
+    checkout_calls = []
+
+    class DirtyRepo:
+        def __init__(self, repo_path):
+            self.active_branch = SimpleNamespace(name="main")
+            self.head = SimpleNamespace(is_detached=False)
+            self.git = SimpleNamespace(
+                checkout=lambda branch: checkout_calls.append(branch)
+            )
+
+        def is_dirty(self, untracked_files=False):
+            return True
+
+    monkeypatch.setattr(cli, "Repo", DirtyRepo)
+    monkeypatch.setattr(
+        cli,
+        "get_diff",
+        lambda *args: {"changed_files": ["app.py"], "diff_text": "diff"},
+    )
+    monkeypatch.setattr(
+        cli.planner,
+        "plan",
+        lambda *args: {"capabilities": [], "reason": "Python changed"},
+    )
+
+    with pytest.raises(RuntimeError, match="review requires a clean working tree"):
+        cli.review(
+            "repo",
+            "feature",
+            log_path=str(tmp_path / "runs.jsonl"),
+        )
+
+    assert checkout_calls == []

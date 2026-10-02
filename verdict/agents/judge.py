@@ -28,32 +28,64 @@ def decide_verdict(diff_text: str, evidence: list[Evidence], comments: list[dict
     prompt = JUDGE_PROMPT.format(diff=diff_text[:4000], evidence=evidence, comments=comments)
     try:
         result = call_llm_json(prompt)
-        verdict = result.get("verdict", "comment")
-        return {
-            "verdict": verdict if verdict in VALID_VERDICTS else "comment",
-            "justification": result.get("justification", ""),
-            "source": "llm",
-        }
     except LLMError as error:
-        has_blocking_comment = any(
-            isinstance(comment, dict) and comment.get("severity") == "blocking" for comment in comments
+        return _fallback_verdict(comments, evidence, error)
+
+    if not isinstance(result, dict):
+        return _fallback_verdict(
+            comments,
+            evidence,
+            ValueError("Judge response must be a JSON object."),
         )
-        has_serious_evidence = any(
-            isinstance(item, dict)
-            and item.get("kind") == "security"
-            and item.get("severity") in ("high", "medium")
-            for item in evidence
+
+    verdict = result.get("verdict")
+    justification = result.get("justification")
+    if (
+        not isinstance(verdict, str)
+        or verdict not in VALID_VERDICTS
+        or not isinstance(justification, str)
+    ):
+        return _fallback_verdict(
+            comments,
+            evidence,
+            ValueError("Judge response contains an invalid verdict or justification."),
         )
-        return {
-            "verdict": "request_changes" if has_blocking_comment or has_serious_evidence else "comment",
-            "justification": (
-                "Fallback rule: blocking severity present."
-                if has_blocking_comment or has_serious_evidence
-                else "Fallback rule: only minor comments or evidence."
-            ),
-            "source": "fallback",
-            "error": str(error),
-        }
+
+    return {
+        "verdict": verdict,
+        "justification": justification,
+        "source": "llm",
+    }
+
+
+def _fallback_verdict(
+    comments: list[dict],
+    evidence: list[Evidence],
+    error: Exception,
+) -> dict:
+    """Apply deterministic verdict rules when the Judge response is unusable."""
+    has_blocking_comment = any(
+        isinstance(comment, dict) and comment.get("severity") == "blocking"
+        for comment in comments
+    )
+    has_serious_evidence = any(
+        isinstance(item, dict)
+        and item.get("kind") == "security"
+        and item.get("severity") in ("high", "medium")
+        for item in evidence
+    )
+    blocking = has_blocking_comment or has_serious_evidence
+
+    return {
+        "verdict": "request_changes" if blocking else "comment",
+        "justification": (
+            "Fallback rule: blocking severity present."
+            if blocking
+            else "Fallback rule: only minor comments or evidence."
+        ),
+        "source": "fallback",
+        "error": str(error),
+    }
 
 
 def _supported_evidence(evidence: list[Evidence]) -> list[Evidence]:

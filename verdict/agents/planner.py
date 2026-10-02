@@ -13,20 +13,20 @@ capabilities that are relevant. You do not execute anything.
 The initial available semantic capabilities are:
 - detect_python_security: inspect changed Python source for security issues
 - lint_python: inspect changed Python files for lint/style issues
-- check_new_python_test_coverage: check whether newly added non-test Python
-  functions have corresponding tests. Select this capability whenever the diff
-  adds or modifies a Python function and the change is not itself a test file.
+- check_new_python_test_coverage: check whether newly added or modified
+  non-test Python functions have corresponding tests.
 - check_container_base_image_pinning: inspect added Dockerfile base-image tags
 
 Capability selection rules:
-- If the diff adds or modifies a Python function in a non-test Python file,
-  include check_new_python_test_coverage.
-- If Python source is changed, consider lint_python.
+- MANDATORY: If the diff adds or modifies ANY Python function in a
+  non-test Python file, you MUST include check_new_python_test_coverage.
+- MANDATORY: If Python source is changed, include lint_python.
 - If Python source contains security-sensitive behavior such as credentials,
   secrets, authentication, input validation, subprocesses, filesystem access,
-  or network access, consider detect_python_security.
+  or network access, include detect_python_security.
 - If a Dockerfile base image is added or changed, include
   check_container_base_image_pinning.
+- Select ALL applicable capabilities. Never omit a mandatory capability.
 - Select all relevant capabilities; do not select only one when multiple
   capabilities apply.
 

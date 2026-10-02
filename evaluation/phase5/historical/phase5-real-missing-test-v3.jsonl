@@ -1,0 +1,7 @@
+{"timestamp": 1790795056.0550666, "stage": "diff", "branch": "feature/missing-test", "base": "main", "changed_files": ["utils.py"]}
+{"timestamp": 1790795085.280721, "stage": "planner", "capabilities": ["lint_python"], "reason": "The diff includes a new function definition and a docstring, which are relevant for linting and style checks.", "source": "llm"}
+{"timestamp": 1790795085.4640317, "stage": "tool_registry", "capabilities": ["lint_python"], "selected_tools": ["ruff"], "unsupported_capabilities": []}
+{"timestamp": 1790795085.4640317, "stage": "scan_results", "bandit": [], "ruff": [], "test_delta": {}}
+{"timestamp": 1790795090.5896935, "stage": "reviewer", "comments": [], "source": "llm"}
+{"timestamp": 1790795097.0192418, "stage": "investigation_planner", "round": 1, "investigate": false, "goals": [], "source": "llm"}
+{"timestamp": 1790795097.115777, "stage": "judge", "verdict": "approve", "justification": "No issues found.", "source": "rule"}

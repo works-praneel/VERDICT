@@ -1,0 +1,7 @@
+{"timestamp": 1790794269.4834998, "stage": "diff", "branch": "feature/clean-pr", "base": "main", "changed_files": [".gitignore", "app.py", "tests/test_app.py"]}
+{"timestamp": 1790794291.0496457, "stage": "planner", "capabilities": ["detect_python_security", "lint_python", "check_new_python_test_coverage"], "reason": "The pull request introduces new Python functions and tests, so it's important to check for security issues, linting/style issues, and ensure that the new functions have corresponding tests.", "source": "llm"}
+{"timestamp": 1790794291.6446826, "stage": "tool_registry", "capabilities": ["detect_python_security", "lint_python", "check_new_python_test_coverage"], "selected_tools": ["bandit", "ruff", "check_test_delta"], "unsupported_capabilities": []}
+{"timestamp": 1790794291.6456919, "stage": "scan_results", "bandit": [], "ruff": [], "test_delta": {"new_functions": ["divide"], "new_test_functions": ["test_divide", "test_divide_by_zero_raises"], "test_files_touched": ["tests/test_app.py"], "missing_coverage": false}}
+{"timestamp": 1790794297.277973, "stage": "reviewer", "comments": [], "source": "llm"}
+{"timestamp": 1790794304.8214357, "stage": "investigation_planner", "round": 1, "investigate": false, "goals": [], "source": "llm"}
+{"timestamp": 1790794304.932801, "stage": "judge", "verdict": "approve", "justification": "No issues found.", "source": "rule"}

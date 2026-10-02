@@ -45,9 +45,22 @@ def decide_tools(changed_files: list) -> dict:
     prompt = SCANNER_PROMPT.format(files="\n".join(changed_files))
     try:
         decision = call_llm_json(prompt)
-        tools = [t for t in decision.get("tools", []) if t in AVAILABLE_TOOLS]
-        return {"tools": tools, "reason": decision.get("reason", ""), "source": "llm"}
-    except LLMError as e:
+        if not isinstance(decision, dict):
+            raise ValueError("Scanner response must be a JSON object.")
+
+        requested_tools = decision.get("tools")
+        if not isinstance(requested_tools, list) or not all(
+            isinstance(tool, str) for tool in requested_tools
+        ):
+            raise ValueError("Scanner response field 'tools' must be a list of strings.")
+
+        reason = decision.get("reason", "")
+        if not isinstance(reason, str):
+            raise ValueError("Scanner response field 'reason' must be a string.")
+
+        tools = [tool for tool in requested_tools if tool in AVAILABLE_TOOLS]
+        return {"tools": tools, "reason": reason, "source": "llm"}
+    except (LLMError, ValueError, TypeError) as e:
         result = _fallback_rule(changed_files)
         result["error"] = str(e)
         return result

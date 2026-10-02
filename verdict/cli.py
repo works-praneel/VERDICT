@@ -1,6 +1,7 @@
 """CLI entry point for the Planner-first PR review pipeline."""
 import argparse
 import json
+import re
 
 from git import Repo
 
@@ -10,14 +11,137 @@ from .logger import DecisionLogger
 from .tools import get_diff
 from .tool_registry import ToolRegistry
 
+def _is_test_file(path: str) -> bool:
+    """Return True when a path represents a Python test file."""
+    normalized = path.replace("\\", "/")
+    filename = normalized.rsplit("/", 1)[-1].lower()
+    parts = {part.lower() for part in normalized.split("/")}
+
+    return (
+        "tests" in parts
+        or filename.startswith("test_")
+        or filename.endswith("_test.py")
+    )
+
+
+def _requires_python_test_coverage(
+    changed_files: list[str],
+    diff_text: str,
+) -> bool:
+    """Return whether Python source code changed outside test files."""
+    python_files = [
+        path
+        for path in changed_files
+        if path.lower().endswith(".py") and not _is_test_file(path)
+    ]
+
+    if not python_files:
+        return False
+
+    current_file = None
+
+    for line in diff_text.splitlines():
+        if line.startswith("+++ b/"):
+            current_file = line[6:].strip()
+            continue
+
+        if not line.startswith(("+", "-")) or line.startswith(("+++", "---")):
+            continue
+
+        if current_file not in python_files:
+            continue
+
+        code = line[1:].lstrip()
+        if code and not code.startswith("#"):
+            return True
+
+    return False
+
+
+def _requires_docker_base_image_check(
+    changed_files: list[str],
+    diff_text: str,
+) -> bool:
+    """Return whether the diff adds or changes a Dockerfile FROM instruction."""
+    dockerfiles = {
+        path.replace("\\", "/").lower()
+        for path in changed_files
+        if path.replace("\\", "/").rsplit("/", 1)[-1].lower() == "dockerfile"
+    }
+
+    current_file = None
+
+    for line in diff_text.splitlines():
+        if line.startswith("+++ b/"):
+            current_file = line[6:].strip().replace("\\", "/").lower()
+            continue
+
+        if (
+            current_file in dockerfiles
+            and line.startswith("+")
+            and not line.startswith("+++")
+            and re.match(r"\s*FROM(?:\s|$)", line[1:], re.IGNORECASE)
+        ):
+            return True
+
+    return False
+
+
+def _enforce_required_capabilities(
+    decision: dict,
+    changed_files: list[str],
+    diff_text: str,
+) -> dict:
+    """Add deterministic capabilities that the LLM is not allowed to omit."""
+    capabilities = list(decision["capabilities"])
+
+    if (
+        any(path.lower().endswith(".py") for path in changed_files)
+        and "lint_python" not in capabilities
+    ):
+        capabilities.append("lint_python")
+
+    if _requires_python_test_coverage(changed_files, diff_text):
+        if "check_new_python_test_coverage" not in capabilities:
+            capabilities.append("check_new_python_test_coverage")
+
+    if (
+        _requires_docker_base_image_check(changed_files, diff_text)
+        and "check_container_base_image_pinning" not in capabilities
+    ):
+        capabilities.append("check_container_base_image_pinning")
+
+    return {
+        **decision,
+        "capabilities": capabilities,
+    }
 
 def _plan_or_fallback(diff: dict) -> dict:
     """Use semantic planning, retaining Scanner as the v0 failure fallback."""
     try:
         decision = planner.plan(diff["changed_files"], diff["diff_text"])
+        decision = _enforce_required_capabilities(
+            decision,
+            diff["changed_files"],
+            diff["diff_text"],
+        )
         return {"path": "planner", "decision": decision}
     except planner.PlannerError as error:
         decision = scanner.decide_tools(diff["changed_files"])
+        required_tools = scanner._fallback_rule(diff["changed_files"])["tools"]
+        for tool_name in required_tools:
+            if tool_name not in decision["tools"]:
+                decision["tools"].append(tool_name)
+
+        if (
+            _requires_docker_base_image_check(
+                diff["changed_files"],
+                diff["diff_text"],
+            )
+            and "check_container_base_image_pinning" not in decision["tools"]
+        ):
+            decision["tools"].append("check_container_base_image_pinning")
+
         decision["planner_error"] = str(error)
         return {"path": "scanner_fallback", "decision": decision}
 
@@ -50,6 +174,12 @@ def review(
     logger.log("planner" if route["path"] == "planner" else "scanner", decision)
 
     repo = Repo(repo_path)
+    if repo.is_dirty(untracked_files=True):
+        raise RuntimeError(
+            f"Repository at {repo_path} has uncommitted changes; "
+            "review requires a clean working tree."
+        )
+
     original_ref = repo.active_branch.name if not repo.head.is_detached else repo.head.commit.hexsha
 
     try:
@@ -188,10 +318,16 @@ def review(
                         "new_evidence": execution.evidence,
                     },
                 )
-
-                review_result = reviewer.draft_comments(context.diff, context.evidence)
-                logger.log("reviewer", {"round": round_num, **review_result})
-                context.comments = review_result["comments"]
+                if execution.evidence:
+                    review_result = reviewer.draft_comments(
+                        context.diff,
+                        context.evidence,
+                    )
+                    logger.log(
+                        "reviewer",
+                        {"round": round_num, **review_result},
+                    )
+                    context.comments = review_result["comments"]
 
     finally:
         repo.git.checkout(original_ref)

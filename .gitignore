@@ -3,3 +3,5 @@ __pycache__/
 .pytest_cache/
 verdict_runs.jsonl
 *.egg-info/
+.ruff_cache/
+llm_verification_report.json

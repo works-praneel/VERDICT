@@ -15,15 +15,15 @@ def test_investigation_planner_accepts_valid_non_investigating_response(monkeypa
     assert result == {"investigate": False, "goals": [], "source": "llm"}
 
 
-def test_investigation_planner_accepts_a_valid_semantic_goal(monkeypatch):
+def test_investigation_planner_accepts_an_available_investigation_goal(monkeypatch):
     result = _plan(
         monkeypatch,
         {
             "investigate": True,
             "goals": [
                 {
-                    "question": "Are there lint findings?",
-                    "required_capability": "lint_python",
+                    "question": "Do existing tests reference this function?",
+                    "required_capability": "inspect_python_test_references",
                     "reason": "The current evidence is incomplete.",
                 }
             ],
@@ -31,7 +31,10 @@ def test_investigation_planner_accepts_a_valid_semantic_goal(monkeypatch):
     )
 
     assert result["investigate"] is True
-    assert result["goals"][0].required_capability == "lint_python"
+    assert (
+        result["goals"][0].required_capability
+        == "inspect_python_test_references"
+    )
 
 
 def test_investigation_planner_fails_safely_for_malformed_response(monkeypatch):
@@ -66,13 +69,24 @@ def test_investigation_planner_supports_multiple_goals(monkeypatch):
         {
             "investigate": True,
             "goals": [
-                {"question": "lint?", "required_capability": "lint_python", "reason": "review gap"},
-                {"question": "security?", "required_capability": "detect_python_security", "reason": "review gap"},
+                {
+                    "question": "Find existing test references?",
+                    "required_capability": "inspect_python_test_references",
+                    "reason": "review gap",
+                },
+                {
+                    "question": "Trace the input source?",
+                    "required_capability": "trace_input_source",
+                    "reason": "review gap",
+                },
             ],
         },
     )
 
-    assert [goal.required_capability for goal in result["goals"]] == ["lint_python", "detect_python_security"]
+    assert [goal.required_capability for goal in result["goals"]] == [
+        "inspect_python_test_references",
+        "trace_input_source",
+    ]
 
 
 def test_investigation_planner_uses_empty_fallback_when_llm_fails(monkeypatch):

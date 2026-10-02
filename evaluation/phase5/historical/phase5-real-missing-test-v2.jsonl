@@ -1,0 +1,7 @@
+{"timestamp": 1790794381.0618944, "stage": "diff", "branch": "feature/missing-test", "base": "main", "changed_files": ["utils.py"]}
+{"timestamp": 1790794392.5370336, "stage": "planner", "capabilities": ["lint_python"], "reason": "The diff includes a new function `clamp` which should be checked for lint/style issues.", "source": "llm"}
+{"timestamp": 1790794392.6911752, "stage": "tool_registry", "capabilities": ["lint_python"], "selected_tools": ["ruff"], "unsupported_capabilities": []}
+{"timestamp": 1790794392.6921782, "stage": "scan_results", "bandit": [], "ruff": [], "test_delta": {}}
+{"timestamp": 1790794400.5422843, "stage": "reviewer", "comments": [], "source": "llm"}
+{"timestamp": 1790794406.9955938, "stage": "investigation_planner", "round": 1, "investigate": false, "goals": [], "source": "llm"}
+{"timestamp": 1790794407.0905876, "stage": "judge", "verdict": "approve", "justification": "No issues found.", "source": "rule"}

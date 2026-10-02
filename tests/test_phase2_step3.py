@@ -23,6 +23,20 @@ def test_latest_docker_base_image_is_detected():
     assert findings[0]["reason"] == "latest"
 
 
+@pytest.mark.parametrize(
+    "image",
+    [
+        "python:latest@sha256:0123456789abcdef",
+        "scratch",
+    ],
+)
+def test_digest_pinned_and_scratch_base_images_are_not_reported(image):
+    assert check_container_base_image_pinning(
+        f"+++ b/Dockerfile\n@@ -0,0 +1 @@\n+FROM {image}",
+        ["Dockerfile"],
+    ) == []
+
+
 @pytest.mark.parametrize("image", ["python:3.12", "ubuntu:24.04"])
 def test_version_tagged_docker_base_images_are_not_detected(image):
     assert check_container_base_image_pinning(
